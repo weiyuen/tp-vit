@@ -15,7 +15,8 @@ from imgaug import augmenters as iaa
 from torch.utils.data import DataLoader
 
 from datasets import ImageNet
-from models.tpr_block_vit import TPViT
+# from models.tpr_block_vit_lucidrains import TPViT
+from models.tpr_block_vit_hf import TPViT
 
 
 class PLModel(pl.LightningModule):
@@ -24,14 +25,15 @@ class PLModel(pl.LightningModule):
         self.save_hyperparameters()
         self.lr = lr
         self.epochs = epochs
-        self.model = TP_ViT(
-            image_size=224,
-            patch_size=16,
-            num_classes=2,
+        self.model = TPViT(
+            # image_size=224,
+            # patch_size=16,
+            num_classes=1000,
             dim=768,
-            depth=2,
-            heads=8,
-            mlp_dim=3072
+            # depth=10,
+            heads=12,
+            mlp_dim=3072,
+            n_roles=12
         )
         self.loss = torch.nn.CrossEntropyLoss(label_smoothing=kwargs['label_smoothing'])
         self.softmax = torch.nn.functional.softmax
@@ -72,20 +74,22 @@ class PLModel(pl.LightningModule):
         self.log('test_acc', acc)
         
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(
+        optimizer = torch.optim.SGD(
             self.parameters(),
             lr=self.lr,
-            #momentum=0.9,
-            weight_decay=0.005
+            momentum=0.9,
+            weight_decay=0.01
         )
         scheduler = {
-            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+            "scheduler": torch.optim.lr_scheduler.OneCycleLR(
                 optimizer,
-                patience=5,
-                factor=0.2,
-                min_lr=1e-7
+                max_lr=self.lr,
+                epochs=64,
+                steps_per_epoch=5005,
+                pct_start=0.05,
+                div_factor=25
             ),
-            "interval": "epoch",
+            "interval": "step",
             "frequency": 1,
             "monitor": "val_loss",
             "name": "lr"
@@ -99,7 +103,7 @@ def worker_init_fn(worker_id):
 
 def main():
     # hardware parameters
-    n_workers = 5
+    n_workers = 6
     
     # model parameters
     image_size = 224
@@ -113,13 +117,13 @@ def main():
 
     # training parameters
     batch_size = 128
-    epochs = 128
-    lr = 5e-4
+    epochs = 64
+    lr = 2e-3
     label_smoothing = 0.1
 
 
     wandb_logger = pl.loggers.WandbLogger(
-        project="tpr-vit-lucidrains", log_model="all"
+        project="tpr-block-vit", log_model="all"
     )
 
     '''transform = torchvision.transforms.Compose([
@@ -146,11 +150,11 @@ def main():
                 shear=(-5, 5)
             ),
             iaa.AdditiveGaussianNoise((0, 15), per_channel=True),
-            #iaa.GaussianBlur(sigma=(0.0, 0.1)),
+            iaa.GaussianBlur(sigma=(0.0, 0.15)),
             iaa.MultiplyBrightness(mul=(0.6, 1.4)),
             iaa.MultiplyHueAndSaturation((0.6, 1.4), per_channel=True),
             iaa.GammaContrast(),
-            #iaa.ChangeColorTemperature((2000, 10000)),
+            # iaa.ChangeColorTemperature((2000, 10000)),
             iaa.Cutout(nb_iterations=(0,2), size=0.2),
             iaa.Dropout((0, 0.1))
         ]).augment_image,
@@ -173,11 +177,11 @@ def main():
     )'''
 
     train_ds = ImageNet(
-        r'B:\Datasets\imagenet21k_resized\imagenet21k_train',
+        r'B:\Datasets\ImageNet2\train',
         transform=transform
     )
     valid_ds = ImageNet(
-        r'B:\Datasets\imagenet21k_resized\imagenet21k_val',
+        r'B:\Datasets\ImageNet2\validation',
         transform=val_transform
     )
 
@@ -210,7 +214,7 @@ def main():
 
     trainer = pl.Trainer(
         gradient_clip_val=1,
-        #accumulate_grad_batches=16,
+        # accumulate_grad_batches=16,
         logger=wandb_logger,
         log_every_n_steps=25,
         accelerator='gpu',
