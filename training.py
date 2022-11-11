@@ -31,9 +31,9 @@ class PLModel(pl.LightningModule):
             num_classes=1000,
             dim=768,
             # depth=10,
-            heads=12,
+            heads=8,
             mlp_dim=3072,
-            n_roles=12
+            n_roles=8
         )
         self.loss = torch.nn.CrossEntropyLoss(label_smoothing=kwargs['label_smoothing'])
         self.softmax = torch.nn.functional.softmax
@@ -74,22 +74,20 @@ class PLModel(pl.LightningModule):
         self.log('test_acc', acc)
         
     def configure_optimizers(self):
-        optimizer = torch.optim.SGD(
+        optimizer = torch.optim.AdamW(
             self.parameters(),
             lr=self.lr,
-            momentum=0.9,
+            # momentum=0.9,
             weight_decay=0.01
         )
         scheduler = {
-            "scheduler": torch.optim.lr_scheduler.OneCycleLR(
+            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer,
-                max_lr=self.lr,
-                epochs=64,
-                steps_per_epoch=5005,
-                pct_start=0.05,
-                div_factor=25
+                patience=4,
+                factor=0.1,
+                min_lr=5e-7
             ),
-            "interval": "step",
+            "interval": "epoch",
             "frequency": 1,
             "monitor": "val_loss",
             "name": "lr"
@@ -117,13 +115,13 @@ def main():
 
     # training parameters
     batch_size = 128
-    epochs = 64
-    lr = 2e-3
+    epochs = 128
+    lr = 5e-4
     label_smoothing = 0.1
 
 
     wandb_logger = pl.loggers.WandbLogger(
-        project="tpr-block-vit", log_model="all"
+        project="tpr-block-vit", log_model="all", id="29smtmtb", resume="must"
     )
 
     '''transform = torchvision.transforms.Compose([
@@ -213,6 +211,7 @@ def main():
     swa = pl.callbacks.StochasticWeightAveraging(swa_lrs=5e-2)
 
     trainer = pl.Trainer(
+        resume_from_checkpoint=r'tpr-block-vit\29smtmtb\checkpoints\epoch=6-step=35035.ckpt',
         gradient_clip_val=1,
         # accumulate_grad_batches=16,
         logger=wandb_logger,

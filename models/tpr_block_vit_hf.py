@@ -22,7 +22,7 @@ class PreNorm(nn.Module):
 
 
 class FeedForward(nn.Module):
-    def __init__(self, dim, hidden_dim, dropout = 0.):
+    def __init__(self, dim, hidden_dim, dropout=0.):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim, hidden_dim),
@@ -37,7 +37,7 @@ class FeedForward(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0.):
+    def __init__(self, dim, heads=8, dim_head=96, dropout=0.):
         super().__init__()
         inner_dim = dim_head *  heads
         project_out = not (heads == 1 and dim_head == dim)
@@ -56,7 +56,7 @@ class Attention(nn.Module):
         ) if project_out else nn.Identity()
 
     def forward(self, x):
-        qkv = self.to_qkv(x).chunk(3, dim = -1)
+        qkv = self.to_qkv(x).chunk(3, dim=-1)
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), qkv)
 
         dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
@@ -102,7 +102,7 @@ class TPRInferenceAttention(nn.Module):
     by using TPR as the query to transformer output token,
     with one role per attention head
     '''
-    def __init__(self, dim, n_roles=8, dim_head=64, dropout=0.):
+    def __init__(self, dim, n_roles=8, dim_head=96, dropout=0.):
         super().__init__()
         self.heads = n_roles # one att. head per role
         inner_dim = dim_head * self.heads
@@ -157,8 +157,8 @@ class TPRInferenceBlock(nn.Module):
         self.layers = nn.ModuleList([])
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                TPRPreNorm(dim, TPRInferenceAttention(dim, n_roles = heads, dim_head = dim_head, dropout = dropout)),
-                PreNorm(dim, FeedForward(dim, mlp_dim, dropout = dropout))
+                TPRPreNorm(dim, TPRInferenceAttention(dim, n_roles=heads, dim_head=dim_head, dropout=dropout)),
+                PreNorm(dim, FeedForward(dim, mlp_dim, dropout=dropout))
             ]))
 
     def forward(self, tpr, embedding):
