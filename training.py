@@ -33,7 +33,9 @@ class PLModel(pl.LightningModule):
             # depth=10,
             heads=8,
             mlp_dim=3072,
-            n_roles=8
+            n_roles=8,
+            dim_head=96,
+            freeze_encoder=False
         )
         self.loss = torch.nn.CrossEntropyLoss(label_smoothing=kwargs['label_smoothing'])
         self.softmax = torch.nn.functional.softmax
@@ -83,7 +85,7 @@ class PLModel(pl.LightningModule):
         scheduler = {
             "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer,
-                patience=4,
+                patience=5,
                 factor=0.1,
                 min_lr=5e-7
             ),
@@ -101,7 +103,7 @@ def worker_init_fn(worker_id):
 
 def main():
     # hardware parameters
-    n_workers = 6
+    n_workers = 8
     
     # model parameters
     image_size = 224
@@ -119,9 +121,8 @@ def main():
     lr = 5e-4
     label_smoothing = 0.1
 
-
     wandb_logger = pl.loggers.WandbLogger(
-        project="tpr-block-vit", log_model="all", id="29smtmtb", resume="must"
+        project="tpr-block-vit", log_model=True
     )
 
     '''transform = torchvision.transforms.Compose([
@@ -211,7 +212,6 @@ def main():
     swa = pl.callbacks.StochasticWeightAveraging(swa_lrs=5e-2)
 
     trainer = pl.Trainer(
-        resume_from_checkpoint=r'tpr-block-vit\29smtmtb\checkpoints\epoch=6-step=35035.ckpt',
         gradient_clip_val=1,
         # accumulate_grad_batches=16,
         logger=wandb_logger,
@@ -223,11 +223,16 @@ def main():
         precision=16,
         track_grad_norm=2,
         strategy=pl.strategies.DDPStrategy(
-            find_unused_parameters=False,
+            find_unused_parameters=True,
             process_group_backend='gloo'
         )
     )
-    trainer.fit(model, train_datagen, valid_datagen)
+    ckpt_path = r'tpr-block-vit\pixybg2w\checkpoints\epoch=23-step=120120.ckpt'
+    # when resuming from checkpoint
+    trainer.fit(model, train_datagen, valid_datagen, ckpt_path=ckpt_path)
+
+    # when training from scratch
+    # trainer.fit(model, train_datagen, valid_datagen)
 
 
 if __name__ == '__main__':

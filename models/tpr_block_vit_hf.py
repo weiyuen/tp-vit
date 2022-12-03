@@ -178,14 +178,16 @@ class TPViT(nn.Module):
             dim_head=64,
             dropout=.1,
             n_roles=12,
-            tpr_depth=1
+            tpr_depth=1,
+            freeze_encoder=True
     ):
         super().__init__()
 
         self.vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
 
-        for name, param in self.vit.named_parameters():
-            param.requires_grad = False
+        if freeze_encoder:
+            for name, param in self.vit.named_parameters():
+                param.requires_grad = False
 
         self.mlp_head = nn.Sequential(
             nn.LayerNorm(dim),
