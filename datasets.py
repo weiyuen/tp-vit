@@ -1,3 +1,8 @@
+"""
+Custom dataset for ImageNet. Works similarly to torch ImageFolder.
+Can be used for ImageNet1/21k.
+"""
+
 import cv2
 import numpy as np
 import os

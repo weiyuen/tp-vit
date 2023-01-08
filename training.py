@@ -25,18 +25,7 @@ class PLModel(pl.LightningModule):
         self.save_hyperparameters()
         self.lr = lr
         self.epochs = epochs
-        self.model = TPViT(
-            # image_size=224,
-            # patch_size=16,
-            num_classes=1000,
-            dim=768,
-            # depth=10,
-            heads=8,
-            mlp_dim=3072,
-            n_roles=8,
-            dim_head=96,
-            freeze_encoder=False
-        )
+        self.model = TPViT(**kwargs)
         self.loss = torch.nn.CrossEntropyLoss(label_smoothing=kwargs['label_smoothing'])
         self.softmax = torch.nn.functional.softmax
         self.acc = torchmetrics.Accuracy('multiclass', num_classes=1000)
@@ -103,17 +92,17 @@ def worker_init_fn(worker_id):
 
 def main():
     # hardware parameters
-    n_workers = 16
+    n_workers = 12
+    backend = 'gloo'  # gloo for Win, nccl for Linux
     
     # model parameters
-    image_size = 224
-    patch_size = 16
     num_classes = 1000
     dim = 768
-    depth = 12
-    heads = 12
+    heads = 8
     mlp_dim = 3072
-    dropout = 0.1
+    n_roles = 8
+    dim_head = 96
+    freeze_encoder = False
 
     # training parameters
     batch_size = 128
@@ -125,18 +114,6 @@ def main():
         project="tpr-block-vit", log_model=True
     )
 
-    '''transform = torchvision.transforms.Compose([
-        torchvision.transforms.Resize((224, 224)),
-        torchvision.transforms.RandomHorizontalFlip(),
-        torchvision.transforms.ColorJitter(brightness=0.25, contrast=0.2, saturation=0.2, hue=0.1),
-        torchvision.transforms.RandomAffine(degrees=(-15, 15), translate=(0.15, 0.15), shear=5),
-        torchvision.transforms.ToTensor()
-    ])
-    
-    val_transform = torchvision.transforms.Compose([
-        torchvision.transforms.Resize((224, 224)),
-        torchvision.transforms.ToTensor()
-    ])'''
     transform = torchvision.transforms.Compose([
         iaa.Sequential([
             iaa.Resize({"height": 224, "width": 224}),
@@ -205,7 +182,14 @@ def main():
     model = PLModel(
         lr=lr,
         epochs=epochs,
-        label_smoothing=label_smoothing
+        label_smoothing=label_smoothing,
+        num_classes=num_classes,
+        dim=dim,
+        heads=heads,
+        mlp_dim=mlp_dim,
+        n_roles=n_roles,
+        dim_head=dim_head,
+        freeze_encoder=freeze_encoder
     )
     ckpt_callback = pl.callbacks.ModelCheckpoint(monitor='val_loss')
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval='step')
@@ -224,7 +208,7 @@ def main():
         track_grad_norm=2,
         strategy=pl.strategies.DDPStrategy(
             find_unused_parameters=True,
-            process_group_backend='nccl'
+            process_group_backend=backend
         )
     )
     ckpt_path = r'tpr-block-vit\pixybg2w\checkpoints\epoch=23-step=120120.ckpt'
