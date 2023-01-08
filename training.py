@@ -39,8 +39,8 @@ class PLModel(pl.LightningModule):
         )
         self.loss = torch.nn.CrossEntropyLoss(label_smoothing=kwargs['label_smoothing'])
         self.softmax = torch.nn.functional.softmax
-        self.acc = torchmetrics.Accuracy()
-        self.top_k_acc = torchmetrics.Accuracy(top_k=5)
+        self.acc = torchmetrics.Accuracy('multiclass', num_classes=1000)
+        self.top_k_acc = torchmetrics.Accuracy('multiclass', num_classes=1000, top_k=5)
         
     def forward(self, x):
         return self.model(x)
@@ -85,7 +85,7 @@ class PLModel(pl.LightningModule):
         scheduler = {
             "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer,
-                patience=5,
+                patience=8,
                 factor=0.1,
                 min_lr=5e-7
             ),
@@ -103,7 +103,7 @@ def worker_init_fn(worker_id):
 
 def main():
     # hardware parameters
-    n_workers = 8
+    n_workers = 16
     
     # model parameters
     image_size = 224
@@ -176,11 +176,11 @@ def main():
     )'''
 
     train_ds = ImageNet(
-        r'B:\Datasets\ImageNet2\train',
+        r'/media/weiyuen/SSD/Datasets/ImageNet2/train',
         transform=transform
     )
     valid_ds = ImageNet(
-        r'B:\Datasets\ImageNet2\validation',
+        r'/media/weiyuen/SSD/Datasets/ImageNet2/validation',
         transform=val_transform
     )
 
@@ -224,15 +224,15 @@ def main():
         track_grad_norm=2,
         strategy=pl.strategies.DDPStrategy(
             find_unused_parameters=True,
-            process_group_backend='gloo'
+            process_group_backend='nccl'
         )
     )
     ckpt_path = r'tpr-block-vit\pixybg2w\checkpoints\epoch=23-step=120120.ckpt'
     # when resuming from checkpoint
-    trainer.fit(model, train_datagen, valid_datagen, ckpt_path=ckpt_path)
+    # trainer.fit(model, train_datagen, valid_datagen, ckpt_path=ckpt_path)
 
     # when training from scratch
-    # trainer.fit(model, train_datagen, valid_datagen)
+    trainer.fit(model, train_datagen, valid_datagen)
 
 
 if __name__ == '__main__':
