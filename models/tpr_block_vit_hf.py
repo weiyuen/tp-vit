@@ -10,7 +10,7 @@ from torch import nn
 from transformers import ViTModel, ViTFeatureExtractor
 
 
-# --- lucidrains base classes ---
+# --- lucidrains base classes (used in my TPR block) ---
 class PreNorm(nn.Module):
     def __init__(self, dim, fn):
         super().__init__()
@@ -168,12 +168,12 @@ class TPRInferenceBlock(nn.Module):
         return x
 
 
+# --- My TPR blocks stacked on HF ViT (no MLP head) ---
 class TPViT(nn.Module):
     def __init__(
             self,
             dim=768,
             mlp_dim=3072,
-            num_classes=1000,
             heads=12,
             dim_head=64,
             dropout=.1,
@@ -188,11 +188,6 @@ class TPViT(nn.Module):
         if freeze_encoder:
             for name, param in self.vit.named_parameters():
                 param.requires_grad = False
-
-        self.mlp_head = nn.Sequential(
-            nn.LayerNorm(dim),
-            nn.Linear(dim, num_classes)
-        )
 
         self.tpr_block = TPR(
             seq_length=197,
@@ -216,4 +211,4 @@ class TPViT(nn.Module):
         # Mean pooling
         x = x.mean(dim=1)  # Out: b d
 
-        return self.mlp_head(x)
+        return x

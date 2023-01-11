@@ -7,83 +7,13 @@ Configured to train on ImageNet1/21k
 import imgaug
 import numpy as np
 import pytorch_lightning as pl
-import torch
-import torchmetrics
 import torchvision
 
 from imgaug import augmenters as iaa
 from torch.utils.data import DataLoader
 
 from datasets import ImageNet
-# from models.tpr_block_vit_lucidrains import TPViT
-from models.tpr_block_vit_hf import TPViT
-
-
-class PLModel(pl.LightningModule):
-    def __init__(self, lr=0.1, epochs=100, **kwargs):
-        super().__init__()
-        self.save_hyperparameters()
-        self.lr = lr
-        self.epochs = epochs
-        self.model = TPViT(**kwargs)
-        self.loss = torch.nn.CrossEntropyLoss(label_smoothing=kwargs['label_smoothing'])
-        self.softmax = torch.nn.functional.softmax
-        self.acc = torchmetrics.Accuracy('multiclass', num_classes=1000)
-        self.top_k_acc = torchmetrics.Accuracy('multiclass', num_classes=1000, top_k=5)
-        
-    def forward(self, x):
-        return self.model(x)
-        
-    def training_step(self, train_batch, batch_idx):
-        x, y = train_batch
-        outputs = self.forward(x)
-        loss = self.loss(outputs, y)
-        acc = self.acc(self.softmax(outputs, dim=1), y)
-        top_k_acc = self.top_k_acc(self.softmax(outputs, dim=1), y)
-        self.log('train_loss', loss)
-        self.log('train_acc', acc, on_step=True, on_epoch=False)
-        self.log('train_acc_top_k', top_k_acc, on_step=True, on_epoch=False)
-        return loss
-    
-    def validation_step(self, val_batch, batch_idx):
-        x, y = val_batch
-        outputs = self.forward(x)
-        loss = self.loss(outputs, y)
-        acc = self.acc(self.softmax(outputs, dim=1), y)
-        top_k_acc = self.top_k_acc(self.softmax(outputs, dim=1), y)
-        self.log('val_loss', loss, on_step=False, on_epoch=True, sync_dist=True)
-        self.log('val_acc', acc, on_step=False, on_epoch=True, sync_dist=True)
-        self.log('val_acc_top_k', top_k_acc, on_step=False, on_epoch=True, sync_dist=True)
-        return loss
-    
-    def test_step(self, test_batch, batch_idx):
-        x, y = test_batch
-        outputs = self.forward(x)
-        loss = self.loss(outputs, y)
-        acc = self.acc(self.softmax(outputs, dim=1), y)
-        self.log('test_loss', loss)
-        self.log('test_acc', acc)
-        
-    def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(
-            self.parameters(),
-            lr=self.lr,
-            # momentum=0.9,
-            weight_decay=0.01
-        )
-        scheduler = {
-            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer,
-                patience=8,
-                factor=0.1,
-                min_lr=5e-7
-            ),
-            "interval": "epoch",
-            "frequency": 1,
-            "monitor": "val_loss",
-            "name": "lr"
-        }
-        return [optimizer], [scheduler]
+from models.tpr_block_vit_lightning import PLModel
 
 
 def worker_init_fn(worker_id):
@@ -91,12 +21,15 @@ def worker_init_fn(worker_id):
 
 
 def main():
+    train_ds_path = r'B:\Datasets\imagenet21k_resized\imagenet21k_train'
+    val_ds_path = r'B:\Datasets\imagenet21k_resized\imagenet21k_val'
+
     # hardware parameters
     n_workers = 12
     backend = 'gloo'  # gloo for Win, nccl for Linux
     
     # model parameters
-    num_classes = 1000
+    num_classes = 10450
     dim = 768
     heads = 8
     mlp_dim = 3072
@@ -105,7 +38,9 @@ def main():
     freeze_encoder = False
 
     # training parameters
-    batch_size = 128
+    # pretrained should be False or path to ckpt file
+    pretrained = False
+    batch_size = 64
     epochs = 128
     lr = 5e-4
     label_smoothing = 0.1
@@ -153,11 +88,11 @@ def main():
     )'''
 
     train_ds = ImageNet(
-        r'/media/weiyuen/SSD/Datasets/ImageNet2/train',
+        train_ds_path,
         transform=transform
     )
     valid_ds = ImageNet(
-        r'/media/weiyuen/SSD/Datasets/ImageNet2/validation',
+        val_ds_path,
         transform=val_transform
     )
 
@@ -180,6 +115,7 @@ def main():
         worker_init_fn=worker_init_fn
     )
     model = PLModel(
+        pretrained=pretrained,
         lr=lr,
         epochs=epochs,
         label_smoothing=label_smoothing,
