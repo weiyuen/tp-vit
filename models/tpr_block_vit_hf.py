@@ -7,7 +7,7 @@ import torch
 
 from einops import rearrange
 from torch import nn
-from transformers import ViTModel, ViTFeatureExtractor
+from transformers import ViTModel
 
 
 # --- lucidrains base classes (used in my TPR block) ---
@@ -39,7 +39,7 @@ class FeedForward(nn.Module):
 class Attention(nn.Module):
     def __init__(self, dim, heads=8, dim_head=96, dropout=0.):
         super().__init__()
-        inner_dim = dim_head *  heads
+        inner_dim = dim_head * heads
         project_out = not (heads == 1 and dim_head == dim)
 
         self.heads = heads
@@ -102,18 +102,18 @@ class TPRInferenceAttention(nn.Module):
     by using TPR as the query to transformer output token,
     with one role per attention head
     '''
-    def __init__(self, dim, n_roles=8, dim_head=96, dropout=0.):
+    def __init__(self, dim, tpr_dim_head=96, n_roles=8, dropout=0.):
         super().__init__()
         self.heads = n_roles # one att. head per role
-        inner_dim = dim_head * self.heads
-        project_out = not (self.heads==1 and dim_head==dim)
+        inner_dim = tpr_dim_head * self.heads
+        project_out = not (self.heads==1 and tpr_dim_head==dim)
 
-        self.scale = dim_head ** -0.5
+        self.scale = tpr_dim_head ** -0.5
 
         self.attend = nn.Softmax(dim=-1)
         self.dropout = nn.Dropout(dropout)
 
-        self.to_q = nn.Linear(dim, dim_head, bias=False)
+        self.to_q = nn.Linear(dim, tpr_dim_head, bias=False)
         self.to_kv = nn.Linear(dim, inner_dim*2, bias=False)
 
         self.to_out = nn.Sequential(
@@ -152,12 +152,12 @@ class TPRPreNorm(nn.Module):
 
 
 class TPRInferenceBlock(nn.Module):
-    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout = 0.):
+    def __init__(self, dim, tpr_dim_head, depth, n_roles, mlp_dim, dropout = 0.):
         super().__init__()
         self.layers = nn.ModuleList([])
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                TPRPreNorm(dim, TPRInferenceAttention(dim, n_roles=heads, dim_head=dim_head, dropout=dropout)),
+                TPRPreNorm(dim, TPRInferenceAttention(dim, tpr_dim_head=tpr_dim_head, n_roles=n_roles, dropout=dropout)),
                 PreNorm(dim, FeedForward(dim, mlp_dim, dropout=dropout))
             ]))
 
@@ -178,6 +178,7 @@ class TPViT(nn.Module):
             dim_head=64,
             dropout=.1,
             n_roles=12,
+            tpr_dim_head=64,
             tpr_depth=1,
             freeze_encoder=True
     ):
@@ -198,7 +199,7 @@ class TPViT(nn.Module):
             dropout=dropout
         )
 
-        self.tpr_inference_block = TPRInferenceBlock(dim, tpr_depth, heads, dim_head, mlp_dim, dropout)
+        self.tpr_inference_block = TPRInferenceBlock(dim, tpr_dim_head, tpr_depth, n_roles, mlp_dim, dropout)
 
     def forward(self, x):
         x = self.vit(x)
