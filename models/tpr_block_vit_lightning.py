@@ -36,7 +36,8 @@ class PLModel(pl.LightningModule):
         if pretrained is not False:
             # Filter out MLP layer weights
             state_dict = torch.load(pretrained)['state_dict']
-            filtered_state_dict = {k:v for (k, v) in state_dict.items() if 'mlp_head' not in k}
+            filtered_state_dict = {k: v for (k, v) in state_dict.items() if 'mlp_head' not in k}
+            filtered_state_dict = {k[6:]: v for (k, v) in filtered_state_dict.items()}  # remove model. in name
             self.model.load_state_dict(filtered_state_dict)
 
         self.mlp_head = nn.Sequential(
@@ -83,14 +84,14 @@ class PLModel(pl.LightningModule):
             self.parameters(),
             lr=self.lr,
             # momentum=0.9,
-            weight_decay=0.01
+            weight_decay=0.3
         )
         scheduler = {
             "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer,
-                patience=5,
+                patience=8,
                 factor=0.1,
-                min_lr=5e-7
+                min_lr=1e-7
             ),
             "interval": "epoch",
             "frequency": 1,
