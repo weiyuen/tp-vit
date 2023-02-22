@@ -84,7 +84,7 @@ class PLModel(pl.LightningModule):
             self.parameters(),
             lr=self.lr,
             # momentum=0.9,
-            weight_decay=0.01
+            weight_decay=0.3
         )
         scheduler = {
             "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(

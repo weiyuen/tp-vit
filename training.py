@@ -21,28 +21,33 @@ def worker_init_fn(worker_id):
 
 
 def main():
-    train_ds_path = r'B:\Datasets\imagenet21k_resized\imagenet21k_train'
-    val_ds_path = r'B:\Datasets\imagenet21k_resized\imagenet21k_val'
+    # train_ds_path = r'B:\Datasets\imagenet21k_resized\imagenet21k_train'
+    # val_ds_path = r'B:\Datasets\imagenet21k_resized\imagenet21k_val'
+    # train_ds_path = r'/media/weiyuen/SSD/Datasets/imagenet21k_resized/imagenet21k_train'
+    # val_ds_path = r'/media/weiyuen/SSD/Datasets/imagenet21k_resized/imagenet21k_val'
+    train_ds_path = r'/media/weiyuen/SSD/Datasets/ImageNet2/train'
+    val_ds_path = r'/media/weiyuen/SSD/Datasets/ImageNet2/validation'
 
     # hardware parameters
     n_workers = 12
-    backend = 'gloo'  # gloo for Win, nccl for Linux
+    backend = 'nccl'  # gloo for Win, nccl for Linux
     
     # model parameters
-    num_classes = 10450
+    num_classes = 1000
     dim = 768
-    heads = 8
+    heads = 12
     mlp_dim = 3072
-    n_roles = 8
-    dim_head = 96
+    n_roles = 12
+    dim_head = 64
+    tpr_dim_head = 64
     freeze_encoder = False
 
     # training parameters
     # pretrained should be False or path to ckpt file
     pretrained = False
-    batch_size = 64
-    epochs = 128
-    lr = 5e-4
+    batch_size = 128
+    epochs = 64
+    lr = 1e-4
     label_smoothing = 0.1
 
     wandb_logger = pl.loggers.WandbLogger(
@@ -125,6 +130,7 @@ def main():
         mlp_dim=mlp_dim,
         n_roles=n_roles,
         dim_head=dim_head,
+        tpr_dim_head=tpr_dim_head,
         freeze_encoder=freeze_encoder
     )
     ckpt_callback = pl.callbacks.ModelCheckpoint(monitor='val_loss')
@@ -139,7 +145,7 @@ def main():
         accelerator='gpu',
         devices=2,
         max_epochs=epochs,
-        callbacks=[ckpt_callback, lr_monitor, swa],
+        callbacks=[ckpt_callback, lr_monitor],  # add swa here if necessary
         precision=16,
         track_grad_norm=2,
         strategy=pl.strategies.DDPStrategy(
@@ -147,12 +153,12 @@ def main():
             process_group_backend=backend
         )
     )
-    ckpt_path = r'tpr-block-vit\pixybg2w\checkpoints\epoch=23-step=120120.ckpt'
+    ckpt_path = r'tpr-block-vit/2yih576l/checkpoints/epoch=27-step=35056.ckpt'
     # when resuming from checkpoint
-    # trainer.fit(model, train_datagen, valid_datagen, ckpt_path=ckpt_path)
+    trainer.fit(model, train_datagen, valid_datagen, ckpt_path=ckpt_path)
 
     # when training from scratch
-    trainer.fit(model, train_datagen, valid_datagen)
+    # trainer.fit(model, train_datagen, valid_datagen)
 
 
 if __name__ == '__main__':
