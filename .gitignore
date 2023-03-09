@@ -1,3 +1,6 @@
+.ipynb_checkpoints/
 wandb/
 tpr-block-vit/
 test_outputs/
+__pycache__/
+*.ipynb
