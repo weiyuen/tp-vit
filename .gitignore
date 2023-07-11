@@ -3,6 +3,7 @@ wandb/
 tpr-block-vit/
 test_outputs/
 __pycache__/
-*.ipynb
+Workspace-ViLT.ipynb
+Workspace-ViT.ipynb
 models/tpr_block_vit_lucidrains.py
 models/vit_lucidrains.py
