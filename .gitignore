@@ -5,5 +5,6 @@ test_outputs/
 __pycache__/
 Workspace-ViLT.ipynb
 Workspace-ViT.ipynb
+Visualize Activations.ipynb
 models/tpr_block_vit_lucidrains.py
 models/vit_lucidrains.py
